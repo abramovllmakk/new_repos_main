@@ -11,7 +11,7 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    email: Mapped[str] = mapped_column(String)
+    email: Mapped[str] = mapped_column(String,unique = true)
     name: Mapped[str] = mapped_column(String)
     hashed_password: Mapped[str] = mapped_column(String)
     is_company: Mapped[bool] = mapped_column(Boolean, default=False)
