@@ -1,22 +1,54 @@
 from bases.services.base_service import BaseService
 from models.dto.response_dto import ResponseCreateDTO, ResponseDTO
-from services.exceptions import ObjectDoesntExistsException
+from services.exceptions import NoPermissionException, ObjectDoesntExistsException
+from uows.job_uow import JobUOW
 from uows.response_uow import ResponseUOW
+from uows.user_uow import UserUOW
 
 
 class ResponseService(BaseService):
-    def __init__(self, uow: ResponseUOW) -> None:
+    """
+    Сервис для работы с откликами на вакансии
+    """
+
+    def __init__(self, uow: ResponseUOW, user_uow: UserUOW, job_uow: JobUOW) -> None:
+        """
+        Инициализировать сервис
+        """
         self.uow = uow
+        self.user_uow = user_uow
+        self.job_uow = job_uow
 
     async def create_response(
         self,
         response_create_data: ResponseCreateDTO,
     ) -> ResponseDTO:
         """
-         логика создания отклика
+        Выполнить логику создания отклика
         """
+        # Проверяем что пользователь существует и не является компанией
+        async with self.user_uow as user_uow:
+            user = await user_uow.repository.retrieve(id=response_create_data.user_id)
+            if user is None:
+                raise ObjectDoesntExistsException(
+                    f"Пользователь с id={response_create_data.user_id} не найден"
+                )
+            if user.is_company:
+                raise NoPermissionException(
+                    "Компании не могут откликаться на вакансии"
+                )
+
+        # Проверяем что вакансия существует
+        async with self.job_uow as job_uow:
+            job = await job_uow.repository.retrieve(id=response_create_data.job_id)
+            if job is None:
+                raise ObjectDoesntExistsException(
+                    f"Вакансия с id={response_create_data.job_id} не найдена"
+                )
+
+        # Создаём отклик
         async with self.uow as uow:
-            response = await uow.repository.create(response_create_data) 
+            response = await uow.repository.create(response_create_data)
             await uow.commit()
             return response
 
@@ -25,7 +57,7 @@ class ResponseService(BaseService):
         job_id: int,
     ) -> list[ResponseDTO]:
         """
-        плучить все отклики на вакансию
+        Получить все отклики на вакансию
         """
         async with self.uow as uow:
-            return await uow.repository.list(job_id=job_id)  
+            return await uow.repository.list(job_id=job_id)
